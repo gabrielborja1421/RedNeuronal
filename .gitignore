@@ -1,0 +1,5 @@
+# Ignorar todo en la carpeta 'data', pero mantener las carpetas
+data/**/*
+
+# Excluir archivos .gitignore de la regla anterior
+!data/**/.gitignore

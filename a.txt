@@ -1,0 +1,82 @@
+from PIL import Image
+import os
+import numpy as np
+from sklearn.model_selection import KFold
+import tensorflow as tf
+
+class Model:
+    def __init__(self, training_folder, trainingCategory, widthImg, heightImg, epochs, k):
+        self.training_folder = training_folder
+        self.trainingCategory = trainingCategory
+        self.widthImg = widthImg
+        self.heightImg = heightImg
+        self.epochs = epochs
+        self.k = k
+        
+    def chargeData(self):
+        categories = os.listdir(self.training_folder)
+        images = []
+        labels = []
+
+        x = 0
+        for directory in categories:
+            for image in os.listdir(os.path.join(self.training_folder, directory)):
+                img = Image.open(os.path.join(self.training_folder, directory, image)).convert('L').resize((self.widthImg, self.heightImg))
+                img = np.asarray(img)
+                images.append(img)
+                labels.append(x)
+            x += 1
+        self.trainingImages = np.asarray(images)
+        self.labels_entrenamiento = np.asarray(labels)
+        self.trainingImages = self.trainingImages / 255.
+    
+    def createModel(self):
+        self.modelo = tf.keras.Sequential([
+        tf.keras.layers.Conv2D(32, (2,2), activation='relu', input_shape=(self.widthImg, self.heightImg, 1)),
+        tf.keras.layers.MaxPooling2D(2, 2),
+        tf.keras.layers.Conv2D(64, (2,2), activation='relu'),
+        tf.keras.layers.MaxPooling2D(2, 2),
+        tf.keras.layers.Conv2D(128, (2,2), activation='relu'),
+        tf.keras.layers.MaxPooling2D(2, 2),
+        tf.keras.layers.Conv2D(64, (2,2), activation='relu'),
+        tf.keras.layers.MaxPooling2D(2, 2),
+        tf.keras.layers.Conv2D(32, (2,2), activation='relu'),
+        tf.keras.layers.MaxPooling2D(2, 2),
+        tf.keras.layers.Conv2D(128, (2,2), activation='relu'),
+        tf.keras.layers.MaxPooling2D(2, 2),
+        tf.keras.layers.Dropout(0.2),
+        tf.keras.layers.Flatten(),
+        tf.keras.layers.Dense(100, activation='relu'),
+        tf.keras.layers.Dense(100, activation='relu'),
+        tf.keras.layers.Dense(100, activation='relu'),
+        tf.keras.layers.Dropout(0.2),
+        tf.keras.layers.Dense(100, activation='relu'),
+        tf.keras.layers.Dense(100, activation='relu'),
+        tf.keras.layers.Dense(100, activation='relu'),
+        tf.keras.layers.Dropout(0.2),
+        tf.keras.layers.Dense(100, activation='relu'),
+        tf.keras.layers.Dense(len(os.listdir(self.training_folder)), activation='softmax')
+        ])
+        
+        self.modelo.compile(
+            optimizer='adam',
+            loss=tf.losses.SparseCategoricalCrossentropy(),
+            metrics=['accuracy']
+        )
+
+    # CrossValidation
+    def trainModel(self):
+        kfold = KFold(n_splits=self.k, shuffle=True)
+        scores = []
+        for train, val in kfold.split(self.trainingImages, self.labels_entrenamiento):
+            self.trainingRecord = self.modelo.fit(self.trainingImages[train], self.labels_entrenamiento[train], epochs=self.epochs, validation_data=(self.trainingImages[val], self.labels_entrenamiento[val]))
+            score = self.modelo.evaluate(self.trainingImages[val], self.labels_entrenamiento[val])
+            scores.append(score[1])
+        self.mean_score = np.mean(scores)
+        self.standard_deviation = np.std(self.mean_score)
+
+    def saveModel(self, directorio_modelo):
+        if not os.path.exists(directorio_modelo):
+            os.mkdir(directorio_modelo)
+        self.modelo.save(os.path.join(directorio_modelo, 'modelo.h5'))
+        self.modelo.save_weights(os.path.join(directorio_modelo, 'pesos.h5'))
